@@ -4,7 +4,12 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
+//used for encrypting the password
+// //const encrypt = require('mongoose-encryption');
+// used for hashing the password
+const md5 = require('md5');
+
+
 
 // connecting to mongoose 
 mongoose.connect('mongodb://localhost:27017/userDB');
@@ -16,7 +21,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // We are only encrypting one specific field that is the password attribute using dotenv
-userSchema.plugin(encrypt, { secret: process.env.SECRET , encryptedFields: ['password'] });
+// //userSchema.plugin(encrypt, { secret: process.env.SECRET , encryptedFields: ['password'] });
 
 // Model creation
 const User = mongoose.model('User', userSchema);
@@ -55,7 +60,7 @@ app.get('/register',function(req,res){
 
 app.post('/register',function(req,res){
     
-    const newUser = new User({ email: req.body.username ,password: req.body.password });
+    const newUser = new User({ email: req.body.username ,password: md5(req.body.password )});
     console.log(newUser.email , newUser.password); // 'Person1'
     // console.log(req.body.username , req.body.password ); // 'Person1'
     
@@ -77,8 +82,8 @@ app.post('/login',function(req,res){
 
     // this are the elements the user will enter in the landing page and we are extracting it 
     email = req.body.username;
-    password = req.body.password;
-
+    password = md5(req.body.password);
+    
     User.findOne({email: email }, function(err,foundUser){
         console.log(password);
 
