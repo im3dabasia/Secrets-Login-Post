@@ -4,11 +4,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-//used for encrypting the password
-// //const encrypt = require('mongoose-encryption');
-// used for hashing the password
-const md5 = require('md5');
-
+const bcrypt = require('bcrypt')
+const saltRounds = 10;
 
 
 // connecting to mongoose 
@@ -20,8 +17,6 @@ const userSchema = new mongoose.Schema({
     password: String
 });
 
-// We are only encrypting one specific field that is the password attribute using dotenv
-// //userSchema.plugin(encrypt, { secret: process.env.SECRET , encryptedFields: ['password'] });
 
 // Model creation
 const User = mongoose.model('User', userSchema);
@@ -60,19 +55,21 @@ app.get('/register',function(req,res){
 
 app.post('/register',function(req,res){
     
-    const newUser = new User({ email: req.body.username ,password: md5(req.body.password )});
-    console.log(newUser.email , newUser.password); // 'Person1'
-    // console.log(req.body.username , req.body.password ); // 'Person1'
-    
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+        const newUser = new User({ 
+            email: req.body.username ,
+            password:  hash});
+        // Store hash in your password DB.
+        newUser.save(function(err){
+            if(err){
+                console.log(err)
+            }else{
+                res.render("secrets.ejs")
+            }
+        })
+    });    
 
     // saving the data of the user in the DB
-    newUser.save(function(err){
-        if(err){
-            console.log(err)
-        }else{
-            res.render("secrets.ejs")
-        }
-    })
 
 });
 
@@ -80,26 +77,30 @@ app.post('/register',function(req,res){
 // handeling post request for login page to check if username exits, password is correct or not
 app.post('/login',function(req,res){
 
-    // this are the elements the user will enter in the landing page and we are extracting it 
     email = req.body.username;
-    password = md5(req.body.password);
+    password = req.body.password;
+    console.log(password);
+    
     
     User.findOne({email: email }, function(err,foundUser){
-        console.log(password);
 
         if(err){
             console.log("4");
             res.render("home.ejs")
         }else if(!foundUser){
             console.log("No user");
-            res.send("Hey")
+            res.send("No User FOund")
 
         }else{
-            if(foundUser.password === password){
+            if(foundUser ){
                 console.log("3");
+                bcrypt.compare(password, foundUser.password, function(err, result) {
+                    if(result == true){
+                        console.log("Hoo")
+                        res.render("secrets.ejs")
 
-                console.log("Login Successful");
-                res.render("secrets.ejs")
+                    }
+                });
             }else{
                 console.log("2");
                 
@@ -108,7 +109,6 @@ app.post('/login',function(req,res){
         }
 
     });
-    
 })
 
 
