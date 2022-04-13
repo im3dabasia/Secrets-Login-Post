@@ -8,8 +8,9 @@ const session = require('express-session');
 const passport = require('passport');
 const passportLocalMongoose = require('passport-local-mongoose');
 
-// Adding Signin with google option
+// Adding Signin with google option and facebook
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const FacebookStrategy = require('passport-facebook').Strategy;
 const findOrCreate = require('mongoose-findorcreate');
 
 
@@ -39,7 +40,9 @@ mongoose.connect('mongodb://localhost:27017/userDB');
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId : String
+    googleId : String,
+    facebookId: String,
+    secret: String
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -62,11 +65,12 @@ passport.serializeUser(function(user, done) {
     done(null, user);
   });
 
+// For google authentication
 
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.CLIENT_SECRET,
-    callbackURL: 'http://localhost:3000/auth/google/secrets'
+    callbackURL: process.env.callbackURL
   },
   function(accessToken, refreshToken, profile, cb) {
       console.log(profile,"ALPHA1");
@@ -76,6 +80,19 @@ passport.use(new GoogleStrategy({
   }
 ));
 
+// For facebook authentication
+passport.use(new FacebookStrategy({
+  clientID: process.env.FACEBOOK_APP_ID,
+  clientSecret: process.env.FACEBOOK_APP_SECRET,
+  callbackURL: process.env.FACEBOOK_APP_callbackURL
+},
+function(accessToken, refreshToken, profile, cb) {
+  console.log(profile.id,"GAMMA1");
+  User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+    return cb(err, user);
+  });
+}
+));
 
 // initially this page is thrown to the client 
 app.get('/',function(req,res){
@@ -89,11 +106,24 @@ app.get('/auth/google',
 app.get('/auth/google/secrets', 
 passport.authenticate('google', { failureRedirect: '/login' }),
 function(req, res) {
-// Successful authentication, redirect home.
+// Successful authentication, redirect secrets.
 res.redirect('/secrets');
 console.log("ALPHA3")
 
 });
+
+app.get('/auth/facebook',
+  passport.authenticate('facebook', { scope: ['public_profile', 'email' ,'user_gender','user_friends','user_location']
+  }));
+
+app.get('/auth/facebook/secrets',
+  passport.authenticate('facebook', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect secrets.
+    res.redirect('/secrets');
+    console.log("GAMMA3")
+
+  });
 
   // get login page from root page once user clicks on login button
 app.get('/login',function(req,res){
@@ -106,19 +136,50 @@ app.get('/register',function(req,res){
 });
 
 app.get("/secrets", function(req, res){
-    User.find({"secret": {$ne: null}}, function(err, foundUsers){
-      if (err){
-        console.log(err);
-      } else {
-        if (foundUsers) {
-          res.render("secrets", {usersWithSecrets: foundUsers});
-        }
+  User.find({"secret": {$ne: null}}, function(err, foundUsers){
+    if (err){
+      console.log(err);
+    } else {
+      if (foundUsers) {
+        res.render("secrets", {usersWithSecrets: foundUsers});
       }
-    });
+    }
   });
+});
+
+
+app.get("/submit",function(req,res){
+  if(req.isAuthenticated()){
+    res.render("submit");
+  }
+  else{
+    res.render("login");
+  }
+});
+
+app.post('/submit',function(req,res){
+
+  User.findById(req.user.id, function (err, foundUser) {
+    if(err){
+      console.log(err)
+    }
+    else {
+      if(foundUser){
+        foundUser.secret = req.body.secret;
+        foundUser.save(function(){
+          res.redirect('/secrets')
+        })
+      }
+      else{
+        res.redirect('/login')
+      }
+    }
+
+
+  });
+})
 
 app.get('/logout', function(req, res){
-    console.log("9")
     req.logout();
     res.redirect('/');
   });
@@ -141,32 +202,23 @@ app.post('/register',function(req,res){
 
 // handeling post request for login page to check if username exits, password is correct or not
 app.post('/login',function(req,res){
-    console.log("1");
     const user = new User({
         username : req.body.username,
         password : req.body.password
     });
 
-    console.log("2");
-
-
-
     req.login(user, function(err) {
-    console.log("3");
 
         if (err) { 
-            console.log("4");
 
             console.log(err); 
         }else{
-            console.log("5");
 
             passport.authenticate('local' )(req, res, function() {
             res.redirect('/secrets');
         });
         }
       });
-      console.log("6");
 
 })
 
